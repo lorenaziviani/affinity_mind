@@ -117,12 +117,75 @@ func startEmbeddingRefresher() {
 	}()
 }
 
+func precisionRecallAtK(recommended, relevant []string, k int) (precision, recall float64) {
+	if k > len(recommended) {
+		k = len(recommended)
+	}
+	recSet := make(map[string]struct{})
+	for _, id := range recommended[:k] {
+		recSet[id] = struct{}{}
+	}
+	relSet := make(map[string]struct{})
+	for _, id := range relevant {
+		relSet[id] = struct{}{}
+	}
+	var hits int
+	for id := range recSet {
+		if _, ok := relSet[id]; ok {
+			hits++
+		}
+	}
+	precision = float64(hits) / float64(k)
+	if len(relevant) > 0 {
+		recall = float64(hits) / float64(len(relevant))
+	} else {
+		recall = 0
+	}
+	return
+}
+
+func handleEval(c *gin.Context) {
+	userID := c.Query("user_id")
+	kStr := c.DefaultQuery("k", "5")
+	k, _ := strconv.Atoi(kStr)
+	if k <= 0 {
+		k = 5
+	}
+
+	emb, _, err := getEmbedding(userID)
+	if err != nil {
+		c.JSON(500, gin.H{"error": "embedding failed"})
+		return
+	}
+	query := QueryRequest{Vector: emb, K: k}
+	var resp QueryResponse
+	if err := postJSON(getVectorDBAPI()+"/query", query, &resp); err != nil {
+		c.JSON(500, gin.H{"error": "vector db query failed"})
+		return
+	}
+
+	relevant := []string{}
+	for _, inter := range userInteractions[userID] {
+		relevant = append(relevant, inter.Content)
+	}
+	precision, recall := precisionRecallAtK(resp.IDs, relevant, k)
+	c.JSON(200, gin.H{
+		"user_id":     userID,
+		"k":           k,
+		"precision@k": precision,
+		"recall@k":    recall,
+		"recommended": resp.IDs,
+		"relevant":    relevant,
+	})
+}
+
 func main() {
 	r := gin.Default()
 
 	r.POST("/interactions", handleInteraction)
 	r.GET("/recommendations", handleRecommendations)
 	r.POST("/profile", handleProfile)
+	r.GET("/eval", handleEval)
 	r.GET("/metrics", gin.WrapH(promhttp.Handler()))
 
 	startEmbeddingRefresher()
