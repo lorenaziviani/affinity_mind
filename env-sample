@@ -2,7 +2,7 @@
 # Backend Go
 PORT=8080
 EMBEDDING_API_URL=http://localhost:5000
-VECTOR_DB_URL=http://localhost:6333
+VECTOR_DB_URL=http://localhost:8001
 
 # Embedding Server (Python)
 MODEL_NAME=sentence-transformers/all-MiniLM-L6-v2

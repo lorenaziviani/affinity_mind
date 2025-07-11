@@ -72,6 +72,28 @@ pip install -r requirements.txt
 uvicorn main:app --reload
 ```
 
+## Backend Go (cmd/backend)
+
+O backend Go expõe endpoints REST para registrar interações e obter recomendações personalizadas:
+
+- `POST /interactions` — Salva ações do usuário (ex: visualização, clique, etc.)
+  - Body: `{ "user_id": "123", "content": "item ou texto" }`
+- `GET /recommendations?user_id=123` — Retorna sugestões de itens similares ao perfil do usuário
+
+### Integração
+
+- O backend consome a Embedding API para gerar vetores a partir das interações.
+- Os embeddings são armazenados no Vector DB (FAISS).
+- As recomendações são baseadas na similaridade entre embeddings de usuários/conteúdos.
+
+### Como rodar localmente
+
+```bash
+cd cmd/backend
+go mod tidy
+go run main.go
+```
+
 ## Como rodar o projeto (primeiros passos)
 
 1. Clone o repositório
