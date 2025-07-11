@@ -46,9 +46,6 @@ type QueryResponse struct {
 }
 
 var (
-	embeddingAPI = os.Getenv("EMBEDDING_API_URL")
-	vectorDBAPI  = os.Getenv("VECTOR_DB_URL")
-
 	embeddingLatency = prometheus.NewHistogram(prometheus.HistogramOpts{
 		Name:    "embedding_latency_ms",
 		Help:    "Embedding API latency in milliseconds",
@@ -64,6 +61,14 @@ var (
 func init() {
 	prometheus.MustRegister(embeddingLatency)
 	prometheus.MustRegister(rankingLatency)
+}
+
+func getEmbeddingAPI() string {
+	return os.Getenv("EMBEDDING_API_URL")
+}
+
+func getVectorDBAPI() string {
+	return os.Getenv("VECTOR_DB_URL")
 }
 
 func main() {
@@ -95,7 +100,7 @@ func handleInteraction(c *gin.Context) {
 	embeddingLatency.Observe(elapsed)
 
 	insert := InsertRequest{ID: inter.UserID, Vector: emb}
-	if err := postJSON(vectorDBAPI+"/insert", insert, nil); err != nil {
+	if err := postJSON(getVectorDBAPI()+"/insert", insert, nil); err != nil {
 		logJSON(map[string]interface{}{"level": "error", "msg": "vector db insert failed", "request_id": requestID, "error": err.Error()})
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "vector db insert failed", "request_id": requestID})
 		return
@@ -126,7 +131,7 @@ func handleRecommendations(c *gin.Context) {
 
 	query := QueryRequest{Vector: emb, K: 5}
 	var resp QueryResponse
-	if err := postJSON(vectorDBAPI+"/query", query, &resp); err != nil {
+	if err := postJSON(getVectorDBAPI()+"/query", query, &resp); err != nil {
 		logJSON(map[string]interface{}{"level": "error", "msg": "vector db query failed", "request_id": requestID, "error": err.Error()})
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "vector db query failed", "request_id": requestID})
 		return
@@ -148,7 +153,7 @@ func getEmbedding(text string) ([]float32, float64, error) {
 	req := EmbedRequest{Text: text}
 	var resp EmbedResponse
 	start := time.Now()
-	if err := postJSON(embeddingAPI+"/embed", req, &resp); err != nil {
+	if err := postJSON(getEmbeddingAPI()+"/embed", req, &resp); err != nil {
 		return nil, 0, err
 	}
 	elapsed := float64(time.Since(start).Milliseconds())

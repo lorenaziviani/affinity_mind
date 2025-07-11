@@ -150,3 +150,32 @@ infra/vector-db       # Banco vetorial
 ml/embedding-server   # API Python de embeddings
 docs                  # Documentação e diagramas
 ```
+
+## Docker
+
+Cada serviço possui um Dockerfile próprio. Para buildar as imagens:
+
+```bash
+make docker-backend
+make docker-embedding
+make docker-vector-db
+```
+
+## Testes Automatizados
+
+- Backend Go: `make backend-test`
+- Embedding API: `make embedding-test`
+- Vector DB: `make vector-db-test`
+- Todos: `make test`
+
+## Makefile
+
+O projeto possui um Makefile para facilitar build, testes e execução dos serviços:
+
+```bash
+make build         # Build do backend Go
+make test          # Roda todos os testes
+make run-backend   # Sobe backend Go
+make run-embedding # Sobe embedding API
+make run-vector-db # Sobe vector DB
+```

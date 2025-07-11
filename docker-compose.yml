@@ -1,0 +1,44 @@
+version: '3.8'
+
+services:
+  backend:
+    build:
+      context: ./cmd/backend
+    container_name: affinitymind-backend
+    environment:
+      - PORT=8080
+      - EMBEDDING_API_URL=http://embedding-server:5000/embed 
+      - VECTOR_DB_URL=http://vector-db:8001
+    ports:
+      - "8080:8080"
+    depends_on:
+      - embedding-server
+      - vector-db
+
+  backend-dev:
+    build:
+      context: ./cmd/backend
+      target: dev
+    container_name: affinitymind-backend-dev
+    environment:
+      - PORT=8080
+      - EMBEDDING_API_URL=http://embedding-server:5000/embed 
+      - VECTOR_DB_URL=http://vector-db:8001
+    depends_on:
+      - embedding-server
+      - vector-db
+    # Não expõe porta, uso só para testes interativos
+
+  embedding-server:
+    build: ./ml/embedding-server
+    container_name: affinitymind-embedding
+    environment:
+      - MODEL_NAME=sentence-transformers/all-MiniLM-L6-v2
+    ports:
+      - "5001:5000"
+
+  vector-db:
+    build: ./infra/vector-db
+    container_name: affinitymind-vector-db
+    ports:
+      - "8001:8001"
