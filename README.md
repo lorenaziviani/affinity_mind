@@ -50,6 +50,28 @@ uvicorn main:app --reload
 
 Para medir o tempo médio de geração de embeddings, utilize ferramentas como `curl`, `httpie` ou scripts Python para enviar múltiplas requisições e calcular o tempo médio de resposta (`elapsed_ms`).
 
+## Banco Vetorial (infra/vector-db)
+
+O serviço vetorial utiliza FAISS para armazenar e buscar vetores por similaridade (KNN). Exposto via API REST (FastAPI):
+
+- **Inserção:**
+  - `POST /insert` — Body: `{ "id": "item_id", "vector": [ ... ] }`
+- **Busca KNN:**
+  - `POST /query` — Body: `{ "vector": [ ... ], "k": 5 }`
+  - Response: `{ "ids": [ ... ], "distances": [ ... ] }`
+
+### Recomendações TopN
+
+A lógica de recomendação pode ser implementada no backend Go ou Python, consultando o serviço vetorial para obter os itens mais similares ao vetor de interesse (usuário ou item).
+
+### Como rodar localmente
+
+```bash
+cd infra/vector-db
+pip install -r requirements.txt
+uvicorn main:app --reload
+```
+
 ## Como rodar o projeto (primeiros passos)
 
 1. Clone o repositório
