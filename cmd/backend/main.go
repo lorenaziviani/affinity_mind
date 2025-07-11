@@ -71,12 +71,44 @@ func getVectorDBAPI() string {
 	return os.Getenv("VECTOR_DB_URL")
 }
 
+var userInteractions = make(map[string][]Interaction)
+
+func startEmbeddingRefresher() {
+	ticker := time.NewTicker(1 * time.Hour)
+	go func() {
+		for {
+			<-ticker.C
+			log.Println("[Job] Iniciating embedding refresh...")
+			for userID, interactions := range userInteractions {
+				if len(interactions) == 0 {
+					continue
+				}
+
+				last := interactions[len(interactions)-1]
+				emb, _, err := getEmbedding(last.Content)
+				if err != nil {
+					log.Printf("Error generating embedding for user %s: %v", userID, err)
+					continue
+				}
+				insert := InsertRequest{ID: userID, Vector: emb}
+				err = postJSON(getVectorDBAPI()+"/insert", insert, nil)
+				if err != nil {
+					log.Printf("Error updating embedding in vector-db for user %s: %v", userID, err)
+				}
+				log.Printf("[Job] Embedding updated for user %s", userID)
+			}
+		}
+	}()
+}
+
 func main() {
 	r := gin.Default()
 
 	r.POST("/interactions", handleInteraction)
 	r.GET("/recommendations", handleRecommendations)
 	r.GET("/metrics", gin.WrapH(promhttp.Handler()))
+
+	startEmbeddingRefresher()
 
 	r.Run(":" + os.Getenv("PORT"))
 }
@@ -89,6 +121,8 @@ func handleInteraction(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error(), "request_id": requestID})
 		return
 	}
+
+	userInteractions[inter.UserID] = append(userInteractions[inter.UserID], inter)
 
 	emb, elapsed, err := getEmbedding(inter.Content)
 	if err != nil {
