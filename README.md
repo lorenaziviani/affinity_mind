@@ -27,6 +27,29 @@ O fluxo principal do sistema é:
 
 O diagrama detalhado está disponível em `docs/arquitetura.drawio`.
 
+## Microserviço de Embeddings (ml/embedding-server)
+
+O serviço de embeddings é uma API Python (FastAPI) que expõe o endpoint POST `/embed`, recebendo um JSON `{ "text": "..." }` e retornando o vetor de embedding, o tempo de execução e o provedor utilizado.
+
+- **Modelo principal:** Sentence Transformers (por padrão `all-MiniLM-L6-v2`)
+- **Fallback:** OpenAI API (`text-embedding-ada-002`), caso não haja modelo local ou por configuração
+- **Endpoint:**
+  - `POST /embed`
+  - Request: `{ "text": "sua frase aqui" }`
+  - Response: `{ "embedding": [ ... ], "elapsed_ms": 12.3, "provider": "sentence-transformers" }`
+
+### Como rodar localmente
+
+```bash
+cd ml/embedding-server
+pip install -r requirements.txt
+uvicorn main:app --reload
+```
+
+### Teste de performance
+
+Para medir o tempo médio de geração de embeddings, utilize ferramentas como `curl`, `httpie` ou scripts Python para enviar múltiplas requisições e calcular o tempo médio de resposta (`elapsed_ms`).
+
 ## Como rodar o projeto (primeiros passos)
 
 1. Clone o repositório
