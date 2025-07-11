@@ -87,31 +87,75 @@ O **AffinityMind** é uma plataforma de recomendação baseada em embeddings, de
 
 #### Backend API
 
+**Interações:**
+
 ```bash
 curl -X POST http://localhost:8080/interactions \
   -H "Content-Type: application/json" \
-  -d '{"user_id":"testuser","item_id":"item1"}'
+  -d '{"user_id":"testuser","content":"itemA"}'
 ```
 
 ![backend curl](.gitassets/06-backend-curl.png)
 
+**Perfil demográfico:**
+
+```bash
+curl -X POST http://localhost:8080/profile \
+  -H "Content-Type: application/json" \
+  -d '{"user_id":"testuser","age":30,"gender":"F","location":"SP"}'
+```
+
+![backend profile](.gitassets/11-backend-profile.png)
+
+**Recomendações:**
+
+```bash
+curl -X GET "http://localhost:8080/recommendations?user_id=testuser"
+```
+
+![backend recommendations](.gitassets/12-backend-recommendations.png)
+
+**Avaliação de precisão e recall:**
+
+```bash
+curl -X GET "http://localhost:8080/eval?user_id=testuser&k=5"
+```
+
+![backend eval](.gitassets/13-backend-eval.png)
+
+**Exemplo de resposta de avaliação:**
+
+```json
+{
+  "user_id": "testuser",
+  "k": 5,
+  "precision@k": 0.5,
+  "recall@k": 1.0,
+  "recommended": ["user2", "testuser", "user2", "user2", "user2"],
+  "relevant": ["itemA", "itemB"]
+}
+```
+
+**Nota sobre distâncias grandes:**
+
+- Quando o banco vetorial tem poucos vetores, o campo `distances` pode retornar valores como `3.4028235e+38` (maior float32 possível), indicando que não há vizinhos suficientes. Basta ignorar esses valores no frontend.
+
 #### Embedding-server API
 
 ```bash
-curl -X POST http://localhost:5001/embed \
+curl -X POST http://localhost:5000/embed \
   -H "Content-Type: application/json" \
   -d '{"text":"hello world"}'
 ```
 
-![embedding curl](.gitassets/07-embedding-curl.png)
+![backeembeddinge](.gitassets/07-embedding-curl.png)
 
 **Exemplo de resposta:**
 
 ```json
 {
-  "embedding": [
-    -0.034, 0.031, 0.007, 0.026, -0.039, ... (total: 384 valores)
-  ]
+  "embedding": [0.12, 0.34, ...],
+  "elapsed_ms": 12
 }
 ```
 
@@ -123,10 +167,12 @@ curl -X POST http://localhost:5001/embed \
 curl -X POST http://localhost:8001/insert \
   -H "Content-Type: application/json" \
   -d '{
-    "id": "item1",
-    "vector": [0.1, 0.2, 0.3, 0.4, 0.5]
+    "id": "testuser",
+    "vector": [0.12, 0.34, ...]
   }'
 ```
+
+![vectordb insert](.gitassets/08-vector-db-curl-insert.png)
 
 **Consultar similaridade:**
 
@@ -134,21 +180,21 @@ curl -X POST http://localhost:8001/insert \
 curl -X POST http://localhost:8001/query \
   -H "Content-Type: application/json" \
   -d '{
-    "vector": [0.1, 0.2, 0.3, 0.4, 0.5],
-    "k": 3
+    "vector": [0.12, 0.34, ...],
+    "k": 5
   }'
 ```
+
+![vectordb insert](.gitassets/09-vector-db-curl-query.png)
 
 **Exemplo de resposta:**
 
 ```json
 {
-  "ids": ["item1"],
-  "distances": [0.0]
+  "ids": ["user2", "testuser", "user2", "user2", "user2"],
+  "distances": [1.52, 1.52, 3.4028235e38, 3.4028235e38, 3.4028235e38]
 }
 ```
-
-![vector-db curl](.gitassets/08-vector-db-curl.png)
 
 ---
 
@@ -195,7 +241,7 @@ make vector-db-test
 
 ```env
 # .env.example
-EMBEDDING_API_URL=http://embedding-server:5000/embed
+EMBEDDING_API_URL=http://embedding-server:5000
 VECTOR_DB_URL=http://vector-db:8001
 PORT=8080
 ```

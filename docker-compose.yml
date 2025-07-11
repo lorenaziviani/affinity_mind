@@ -7,7 +7,7 @@ services:
     container_name: affinitymind-backend
     environment:
       - PORT=8080
-      - EMBEDDING_API_URL=http://embedding-server:5000/embed 
+      - EMBEDDING_API_URL=http://embedding-server:5000 
       - VECTOR_DB_URL=http://vector-db:8001
     ports:
       - "8080:8080"
@@ -22,7 +22,7 @@ services:
     container_name: affinitymind-backend-dev
     environment:
       - PORT=8080
-      - EMBEDDING_API_URL=http://embedding-server:5000/embed 
+      - EMBEDDING_API_URL=http://embedding-server:5000 
       - VECTOR_DB_URL=http://vector-db:8001
     depends_on:
       - embedding-server

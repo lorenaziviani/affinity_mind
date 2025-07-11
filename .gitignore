@@ -1,2 +1,13 @@
 .gitconfig*
 git-switch.sh
+
+.env
+.env.test
+.env.local
+.env.development
+.env.production
+.env.test
+.env.test.local
+.env.test.local.development
+.env.test.local.production
+

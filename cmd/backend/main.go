@@ -81,10 +81,23 @@ func getVectorDBAPI() string {
 	return os.Getenv("VECTOR_DB_URL")
 }
 
+func getEmbeddingRefreshInterval() time.Duration {
+	intervalStr := os.Getenv("EMBEDDING_REFRESH_INTERVAL")
+	if intervalStr == "" {
+		return time.Hour
+	}
+	d, err := time.ParseDuration(intervalStr)
+	if err != nil {
+		log.Printf("[WARN] Invalid EMBEDDING_REFRESH_INTERVAL: %s, using 1h", intervalStr)
+		return time.Hour
+	}
+	return d
+}
+
 var userInteractions = make(map[string][]Interaction)
 
 func startEmbeddingRefresher() {
-	ticker := time.NewTicker(1 * time.Hour)
+	ticker := time.NewTicker(getEmbeddingRefreshInterval())
 	go func() {
 		for {
 			<-ticker.C
@@ -158,6 +171,7 @@ func handleEval(c *gin.Context) {
 		return
 	}
 	query := QueryRequest{Vector: emb, K: k}
+	log.Printf("[DEBUG] Payload para /query (eval): %+v", query)
 	var resp QueryResponse
 	if err := postJSON(getVectorDBAPI()+"/query", query, &resp); err != nil {
 		c.JSON(500, gin.H{"error": "vector db query failed"})
@@ -244,6 +258,7 @@ func handleRecommendations(c *gin.Context) {
 	embeddingLatency.Observe(elapsed)
 
 	query := QueryRequest{Vector: emb, K: 5}
+	log.Printf("[DEBUG] Payload para /query (recommendations): %+v", query)
 	var resp QueryResponse
 	if err := postJSON(getVectorDBAPI()+"/query", query, &resp); err != nil {
 		logJSON(map[string]interface{}{"level": "error", "msg": "vector db query failed", "request_id": requestID, "error": err.Error()})
@@ -277,7 +292,8 @@ func getEmbedding(text string) ([]float32, float64, error) {
 	req := EmbedRequest{Text: text}
 	var resp EmbedResponse
 	start := time.Now()
-	if err := postJSON(getEmbeddingAPI()+"/embed", req, &resp); err != nil {
+	url := getEmbeddingAPI() + "/embed"
+	if err := postJSON(url, req, &resp); err != nil {
 		return nil, 0, err
 	}
 	elapsed := float64(time.Since(start).Milliseconds())

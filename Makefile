@@ -8,9 +8,10 @@ build:
 	cd cmd/backend && go build -o backend main.go
 
 # Tests Go
-backend-test:
-	docker-compose up -d backend-dev embedding-server vector-db
-	docker exec affinitymind-backend-dev sh -c "cd /app && go test -v"
+backend-test: # All projects must be running
+	docker-compose down
+	cd cmd/backend && go test -v
+
 
 # Tests Python
 embedding-test:
@@ -32,10 +33,11 @@ docker-vector-db:
 	cd infra/vector-db && docker build -t affinitymind-vector-db .
 
 run-backend:
-	cd cmd/backend && go run main.go
+	cd cmd/backend && PORT=8080 go run main.go
 
 run-embedding:
-	cd ml/embedding-server && uvicorn main:app --reload --host 0.0.0.0 --port 5000
+	cd ml/embedding-server && venv/bin/uvicorn main:app --reload --host 0.0.0.0 --port 5001
 
 run-vector-db:
-	cd infra/vector-db && uvicorn main:app --reload --host 0.0.0.0 --port 8001 
+	cd infra/vector-db && venv/bin/uvicorn main:app --reload --host 0.0.0.0 --port 8001
+
