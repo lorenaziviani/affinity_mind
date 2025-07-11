@@ -94,6 +94,45 @@ go mod tidy
 go run main.go
 ```
 
+## Observabilidade e Métricas
+
+O backend Go expõe métricas Prometheus em `/metrics`, incluindo:
+
+- Latência da API de embedding (`embedding_latency_ms`)
+- Latência do ranking/recommendation (`ranking_latency_ms`)
+
+Todos os endpoints geram logs estruturados em JSON, incluindo `request_id` e scores de similaridade nas recomendações.
+
+### Tracing
+
+O sistema utiliza request_id para rastreabilidade ponta-a-ponta entre logs e requisições.
+
+### Exemplo de log estruturado
+
+```json
+{
+  "level": "info",
+  "msg": "recommendation",
+  "request_id": "lq2v7w7k-1234",
+  "user_id": "123",
+  "recommended_id": "itemA",
+  "score": 0.12
+}
+```
+
+### Exemplo de uso real
+
+```bash
+# Registrar interação
+curl -X POST http://localhost:8080/interactions -H 'Content-Type: application/json' -d '{"user_id": "123", "content": "itemA"}'
+
+# Obter recomendações
+curl "http://localhost:8080/recommendations?user_id=123"
+
+# Ver métricas Prometheus
+curl http://localhost:8080/metrics
+```
+
 ## Como rodar o projeto (primeiros passos)
 
 1. Clone o repositório

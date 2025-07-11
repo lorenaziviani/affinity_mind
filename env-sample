@@ -15,3 +15,6 @@ VECTOR_DB_PORT=8001
 # OpenAI Fallback (opcional)
 OPENAI_API_KEY=your_openai_key_here
 OPENAI_MODEL=text-embedding-ada-002 
+
+# Prometheus metrics (opcional)
+# As métricas são expostas em /metrics no backend Go 

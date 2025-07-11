@@ -4,10 +4,16 @@ import (
 	"bytes"
 	"encoding/json"
 	"io/ioutil"
+	"log"
+	"math/rand"
 	"net/http"
 	"os"
+	"strconv"
+	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
 type Interaction struct {
@@ -21,6 +27,7 @@ type EmbedRequest struct {
 
 type EmbedResponse struct {
 	Embedding []float32 `json:"embedding"`
+	ElapsedMs float64   `json:"elapsed_ms"`
 }
 
 type InsertRequest struct {
@@ -41,75 +48,114 @@ type QueryResponse struct {
 var (
 	embeddingAPI = os.Getenv("EMBEDDING_API_URL")
 	vectorDBAPI  = os.Getenv("VECTOR_DB_URL")
+
+	embeddingLatency = prometheus.NewHistogram(prometheus.HistogramOpts{
+		Name:    "embedding_latency_ms",
+		Help:    "Embedding API latency in milliseconds",
+		Buckets: prometheus.LinearBuckets(10, 10, 10),
+	})
+	rankingLatency = prometheus.NewHistogram(prometheus.HistogramOpts{
+		Name:    "ranking_latency_ms",
+		Help:    "Ranking (vector DB query) latency in milliseconds",
+		Buckets: prometheus.LinearBuckets(10, 10, 10),
+	})
 )
+
+func init() {
+	prometheus.MustRegister(embeddingLatency)
+	prometheus.MustRegister(rankingLatency)
+}
 
 func main() {
 	r := gin.Default()
 
 	r.POST("/interactions", handleInteraction)
 	r.GET("/recommendations", handleRecommendations)
+	r.GET("/metrics", gin.WrapH(promhttp.Handler()))
 
 	r.Run(":" + os.Getenv("PORT"))
 }
 
 func handleInteraction(c *gin.Context) {
+	requestID := genRequestID()
 	var inter Interaction
 	if err := c.ShouldBindJSON(&inter); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		logJSON(map[string]interface{}{"level": "error", "msg": "invalid interaction", "request_id": requestID, "error": err.Error()})
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error(), "request_id": requestID})
 		return
 	}
 
-	emb, err := getEmbedding(inter.Content)
+	emb, elapsed, err := getEmbedding(inter.Content)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "embedding failed"})
+		logJSON(map[string]interface{}{"level": "error", "msg": "embedding failed", "request_id": requestID, "error": err.Error()})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "embedding failed", "request_id": requestID})
 		return
 	}
+
+	embeddingLatency.Observe(elapsed)
 
 	insert := InsertRequest{ID: inter.UserID, Vector: emb}
 	if err := postJSON(vectorDBAPI+"/insert", insert, nil); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "vector db insert failed"})
+		logJSON(map[string]interface{}{"level": "error", "msg": "vector db insert failed", "request_id": requestID, "error": err.Error()})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "vector db insert failed", "request_id": requestID})
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"status": "interaction stored"})
+	logJSON(map[string]interface{}{"level": "info", "msg": "interaction stored", "request_id": requestID, "user_id": inter.UserID})
+	c.JSON(http.StatusOK, gin.H{"status": "interaction stored", "request_id": requestID})
 }
 
 func handleRecommendations(c *gin.Context) {
+	requestID := genRequestID()
 	userID := c.Query("user_id")
 	if userID == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "user_id required"})
+		logJSON(map[string]interface{}{"level": "error", "msg": "user_id required", "request_id": requestID})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "user_id required", "request_id": requestID})
 		return
 	}
 
-	// Search for user embedding
-	// (Here, for simplicity, it is assumed that the user's embedding is equal to the last sent content)
-	// In production, one can maintain history and calculate averages, etc.
-
-	// For example, we will search for the embedding of the user_id itself (ideal: search in the database)
-	// Here, for demonstration purposes, we will generate the embedding of the user_id itself
-	emb, err := getEmbedding(userID)
+	start := time.Now()
+	// Search user embedding (example: embedding of the user_id itself)
+	emb, elapsed, err := getEmbedding(userID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "embedding failed"})
+		logJSON(map[string]interface{}{"level": "error", "msg": "embedding failed", "request_id": requestID, "error": err.Error()})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "embedding failed", "request_id": requestID})
 		return
 	}
+	embeddingLatency.Observe(elapsed)
 
 	query := QueryRequest{Vector: emb, K: 5}
 	var resp QueryResponse
 	if err := postJSON(vectorDBAPI+"/query", query, &resp); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "vector db query failed"})
+		logJSON(map[string]interface{}{"level": "error", "msg": "vector db query failed", "request_id": requestID, "error": err.Error()})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "vector db query failed", "request_id": requestID})
 		return
 	}
+	rankingElapsed := float64(time.Since(start).Milliseconds())
+	rankingLatency.Observe(rankingElapsed)
 
-	c.JSON(http.StatusOK, gin.H{"recommendations": resp.IDs, "distances": resp.Distances})
+	// Log similarity score
+	for i, id := range resp.IDs {
+		logJSON(map[string]interface{}{
+			"level": "info", "msg": "recommendation", "request_id": requestID, "user_id": userID, "recommended_id": id, "score": resp.Distances[i],
+		})
+	}
+
+	c.JSON(http.StatusOK, gin.H{"recommendations": resp.IDs, "distances": resp.Distances, "request_id": requestID})
 }
 
-func getEmbedding(text string) ([]float32, error) {
+func getEmbedding(text string) ([]float32, float64, error) {
 	req := EmbedRequest{Text: text}
 	var resp EmbedResponse
+	start := time.Now()
 	if err := postJSON(embeddingAPI+"/embed", req, &resp); err != nil {
-		return nil, err
+		return nil, 0, err
 	}
-	return resp.Embedding, nil
+	elapsed := float64(time.Since(start).Milliseconds())
+	if resp.ElapsedMs > 0 {
+		elapsed = resp.ElapsedMs
+	}
+	return resp.Embedding, elapsed, nil
 }
 
 func postJSON(url string, payload interface{}, out interface{}) error {
@@ -124,4 +170,13 @@ func postJSON(url string, payload interface{}, out interface{}) error {
 		return json.Unmarshal(data, out)
 	}
 	return nil
+}
+
+func logJSON(obj map[string]interface{}) {
+	b, _ := json.Marshal(obj)
+	log.Println(string(b))
+}
+
+func genRequestID() string {
+	return strconv.FormatInt(time.Now().UnixNano(), 36) + "-" + strconv.Itoa(rand.Intn(10000))
 }
