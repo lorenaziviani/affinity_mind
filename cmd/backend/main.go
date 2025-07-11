@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"io/ioutil"
 	"log"
 	"math/rand"
@@ -45,6 +46,15 @@ type QueryResponse struct {
 	Distances []float32 `json:"distances"`
 }
 
+type UserProfile struct {
+	UserID   string `json:"user_id"`
+	Age      int    `json:"age"`
+	Gender   string `json:"gender"`
+	Location string `json:"location"`
+}
+
+var userProfiles = make(map[string]UserProfile)
+
 var (
 	embeddingLatency = prometheus.NewHistogram(prometheus.HistogramOpts{
 		Name:    "embedding_latency_ms",
@@ -83,9 +93,15 @@ func startEmbeddingRefresher() {
 				if len(interactions) == 0 {
 					continue
 				}
-
 				last := interactions[len(interactions)-1]
-				emb, _, err := getEmbedding(last.Content)
+				profile, ok := userProfiles[userID]
+				var text string
+				if ok {
+					text = fmt.Sprintf("%s | age:%d | gender:%s | location:%s", last.Content, profile.Age, profile.Gender, profile.Location)
+				} else {
+					text = last.Content
+				}
+				emb, _, err := getEmbedding(text)
 				if err != nil {
 					log.Printf("Error generating embedding for user %s: %v", userID, err)
 					continue
@@ -106,6 +122,7 @@ func main() {
 
 	r.POST("/interactions", handleInteraction)
 	r.GET("/recommendations", handleRecommendations)
+	r.POST("/profile", handleProfile)
 	r.GET("/metrics", gin.WrapH(promhttp.Handler()))
 
 	startEmbeddingRefresher()
@@ -181,6 +198,16 @@ func handleRecommendations(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{"recommendations": resp.IDs, "distances": resp.Distances, "request_id": requestID})
+}
+
+func handleProfile(c *gin.Context) {
+	var profile UserProfile
+	if err := c.ShouldBindJSON(&profile); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	userProfiles[profile.UserID] = profile
+	c.JSON(http.StatusOK, gin.H{"status": "profile updated"})
 }
 
 func getEmbedding(text string) ([]float32, float64, error) {
