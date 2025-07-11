@@ -1,181 +1,233 @@
-# AffinityMind
+# 🤝 AffinityMind - Sistema de Recomendação com Embeddings e Similaridade Vetorial
 
-## Motivação
+<div align="center">
+<img src=".gitassets/cover.png" width="350" />
 
-O AffinityMind nasce da necessidade de oferecer recomendações inteligentes e personalizadas, utilizando técnicas modernas de embeddings e similaridade vetorial. O objetivo é proporcionar experiências mais relevantes para os usuários, conectando-os a conteúdos, produtos ou pessoas de acordo com seus interesses reais.
+<div data-badges>
+  <img src="https://img.shields.io/badge/Go-00ADD8?style=for-the-badge&logo=go&logoColor=white" alt="Go" />
+  <img src="https://img.shields.io/badge/Python-3776AB?style=for-the-badge&logo=python&logoColor=white" alt="Python" />
+  <img src="https://img.shields.io/badge/Docker-2496ED?style=for-the-badge&logo=docker&logoColor=white" alt="Docker" />
+  <img src="https://img.shields.io/badge/FastAPI-009688?style=for-the-badge&logo=fastapi&logoColor=white" alt="FastAPI" />
+  <img src="https://img.shields.io/badge/FAISS-0099CC?style=for-the-badge" alt="FAISS" />
+</div>
+</div>
 
-## Overview Técnico
+O **AffinityMind** é uma plataforma de recomendação baseada em embeddings, desenvolvida em Go e Python, que utiliza técnicas modernas de machine learning e busca vetorial para entregar recomendações personalizadas de forma eficiente e escalável.
 
-O sistema é composto por um backend em Go, responsável por orquestrar as requisições dos usuários, uma API de embeddings desenvolvida em Python (utilizando Sentence Transformers), e um banco de dados vetorial para armazenamento e busca eficiente dos embeddings. A comunicação entre os componentes é feita via HTTP/REST.
+✔️ **Backend em Go** para orquestração, API REST e lógica de recomendação
 
-### Principais Componentes
+✔️ **Serviço de Embeddings em Python** (FastAPI + Sentence Transformers)
 
-- **Go Backend** (`cmd/backend`): expõe a API principal para o usuário e integra os demais serviços.
-- **Recommender** (`pkg/recommender`): lógica de recomendação e integração com o banco vetorial.
-- **Embedding Server** (`ml/embedding-server`): API Python para geração de embeddings.
-- **Vector DB** (`infra/vector-db`): banco de dados vetorial (ex: Milvus, Qdrant, Pinecone).
+✔️ **Banco Vetorial em Python** (FastAPI + FAISS)
 
-## Arquitetura
+✔️ **Comunicação entre serviços via HTTP**
 
-O fluxo principal do sistema é:
-
-1. **User Action**: Usuário faz uma requisição de recomendação.
-2. **Go Backend**: Recebe a requisição e solicita o embedding ao serviço Python.
-3. **Embedding API (Python)**: Gera o embedding do item/usuário.
-4. **Vector DB**: Consulta os itens mais similares.
-5. **Recommendations**: Backend retorna as recomendações ao usuário.
-
-O diagrama detalhado está disponível em `docs/arquitetura.drawio`.
-
-## Microserviço de Embeddings (ml/embedding-server)
-
-O serviço de embeddings é uma API Python (FastAPI) que expõe o endpoint POST `/embed`, recebendo um JSON `{ "text": "..." }` e retornando o vetor de embedding, o tempo de execução e o provedor utilizado.
-
-- **Modelo principal:** Sentence Transformers (por padrão `all-MiniLM-L6-v2`)
-- **Fallback:** OpenAI API (`text-embedding-ada-002`), caso não haja modelo local ou por configuração
-- **Endpoint:**
-  - `POST /embed`
-  - Request: `{ "text": "sua frase aqui" }`
-  - Response: `{ "embedding": [ ... ], "elapsed_ms": 12.3, "provider": "sentence-transformers" }`
-
-### Como rodar localmente
-
-```bash
-cd ml/embedding-server
-pip install -r requirements.txt
-uvicorn main:app --reload
-```
-
-### Teste de performance
-
-Para medir o tempo médio de geração de embeddings, utilize ferramentas como `curl`, `httpie` ou scripts Python para enviar múltiplas requisições e calcular o tempo médio de resposta (`elapsed_ms`).
-
-## Banco Vetorial (infra/vector-db)
-
-O serviço vetorial utiliza FAISS para armazenar e buscar vetores por similaridade (KNN). Exposto via API REST (FastAPI):
-
-- **Inserção:**
-  - `POST /insert` — Body: `{ "id": "item_id", "vector": [ ... ] }`
-- **Busca KNN:**
-  - `POST /query` — Body: `{ "vector": [ ... ], "k": 5 }`
-  - Response: `{ "ids": [ ... ], "distances": [ ... ] }`
-
-### Recomendações TopN
-
-A lógica de recomendação pode ser implementada no backend Go ou Python, consultando o serviço vetorial para obter os itens mais similares ao vetor de interesse (usuário ou item).
-
-### Como rodar localmente
-
-```bash
-cd infra/vector-db
-pip install -r requirements.txt
-uvicorn main:app --reload
-```
-
-## Backend Go (cmd/backend)
-
-O backend Go expõe endpoints REST para registrar interações e obter recomendações personalizadas:
-
-- `POST /interactions` — Salva ações do usuário (ex: visualização, clique, etc.)
-  - Body: `{ "user_id": "123", "content": "item ou texto" }`
-- `GET /recommendations?user_id=123` — Retorna sugestões de itens similares ao perfil do usuário
-
-### Integração
-
-- O backend consome a Embedding API para gerar vetores a partir das interações.
-- Os embeddings são armazenados no Vector DB (FAISS).
-- As recomendações são baseadas na similaridade entre embeddings de usuários/conteúdos.
-
-### Como rodar localmente
-
-```bash
-cd cmd/backend
-go mod tidy
-go run main.go
-```
-
-## Observabilidade e Métricas
-
-O backend Go expõe métricas Prometheus em `/metrics`, incluindo:
-
-- Latência da API de embedding (`embedding_latency_ms`)
-- Latência do ranking/recommendation (`ranking_latency_ms`)
-
-Todos os endpoints geram logs estruturados em JSON, incluindo `request_id` e scores de similaridade nas recomendações.
-
-### Tracing
-
-O sistema utiliza request_id para rastreabilidade ponta-a-ponta entre logs e requisições.
-
-### Exemplo de log estruturado
-
-```json
-{
-  "level": "info",
-  "msg": "recommendation",
-  "request_id": "lq2v7w7k-1234",
-  "user_id": "123",
-  "recommended_id": "itemA",
-  "score": 0.12
-}
-```
-
-### Exemplo de uso real
-
-```bash
-# Registrar interação
-curl -X POST http://localhost:8080/interactions -H 'Content-Type: application/json' -d '{"user_id": "123", "content": "itemA"}'
-
-# Obter recomendações
-curl "http://localhost:8080/recommendations?user_id=123"
-
-# Ver métricas Prometheus
-curl http://localhost:8080/metrics
-```
-
-## Como rodar o projeto (primeiros passos)
-
-1. Clone o repositório
-2. Configure as variáveis de ambiente conforme `env-sample`
-3. Siga as instruções específicas em cada subdiretório
+✔️ **Testes automatizados e ambiente Docker para fácil execução**
 
 ---
 
-## Estrutura de Diretórios
+## 🖥️ Como rodar este projeto
 
-```
-cmd/backend           # Backend Go
-pkg/recommender       # Lógica de recomendação
-infra/vector-db       # Banco vetorial
-ml/embedding-server   # API Python de embeddings
-docs                  # Documentação e diagramas
-```
+### Requisitos:
 
-## Docker
+- [Go 1.20+](https://golang.org/doc/install)
+- [Python 3.10+](https://www.python.org/)
+- [Docker & Docker Compose](https://docs.docker.com/get-docker/)
 
-Cada serviço possui um Dockerfile próprio. Para buildar as imagens:
+### Execução:
+
+1. Clone este repositório:
+   ```sh
+   git clone https://github.com/lorenaziviani/affinity_mind.git
+   cd affinity_mind
+   ```
+2. Configure variáveis de ambiente (opcional):
+   ```sh
+   cp .env.sample .env
+   # Edite .env conforme necessário
+   ```
+3. Suba todos os serviços com Docker Compose:
+   ```sh
+   docker-compose up --build
+   ```
+4. Execute os testes automatizados:
+   ```sh
+   make backend-test
+   make embedding-test
+   make vector-db-test
+   ```
+
+---
+
+## 📸 Prints do Projeto
+
+### Subindo os serviços
+
+![docker up](.gitassets/01-docker-up.png)
+
+### Containers ativos
+
+![docker ps](.gitassets/02-docker-ps.png)
+
+### Testes automatizados
+
+#### Backend (Go)
+
+![backend test](.gitassets/03-backend-test.png)
+
+#### Embedding-server (Python)
+
+![embedding test](.gitassets/04-embedding-test.png)
+
+#### Vector-db (Python)
+
+![vector-db test](.gitassets/05-vector-db-test.png)
+
+### Testando as APIs
+
+#### Backend API
 
 ```bash
-make docker-backend
-make docker-embedding
-make docker-vector-db
+curl -X POST http://localhost:8080/interactions \
+  -H "Content-Type: application/json" \
+  -d '{"user_id":"testuser","item_id":"item1"}'
 ```
 
-## Testes Automatizados
+![backend curl](.gitassets/06-backend-curl.png)
 
-- Backend Go: `make backend-test`
-- Embedding API: `make embedding-test`
-- Vector DB: `make vector-db-test`
-- Todos: `make test`
-
-## Makefile
-
-O projeto possui um Makefile para facilitar build, testes e execução dos serviços:
+#### Embedding-server API
 
 ```bash
-make build         # Build do backend Go
-make test          # Roda todos os testes
-make run-backend   # Sobe backend Go
-make run-embedding # Sobe embedding API
-make run-vector-db # Sobe vector DB
+curl -X POST http://localhost:5001/embed \
+  -H "Content-Type: application/json" \
+  -d '{"text":"hello world"}'
 ```
+
+![embedding curl](.gitassets/07-embedding-curl.png)
+
+**Exemplo de resposta:**
+
+```json
+{
+  "embedding": [
+    -0.034, 0.031, 0.007, 0.026, -0.039, ... (total: 384 valores)
+  ]
+}
+```
+
+#### Vector-db API
+
+**Inserir vetor:**
+
+```bash
+curl -X POST http://localhost:8001/insert \
+  -H "Content-Type: application/json" \
+  -d '{
+    "id": "item1",
+    "vector": [0.1, 0.2, 0.3, 0.4, 0.5]
+  }'
+```
+
+**Consultar similaridade:**
+
+```bash
+curl -X POST http://localhost:8001/query \
+  -H "Content-Type: application/json" \
+  -d '{
+    "vector": [0.1, 0.2, 0.3, 0.4, 0.5],
+    "k": 3
+  }'
+```
+
+**Exemplo de resposta:**
+
+```json
+{
+  "ids": ["item1"],
+  "distances": [0.0]
+}
+```
+
+![vector-db curl](.gitassets/08-vector-db-curl.png)
+
+---
+
+## 📝 Principais Features
+
+- **API RESTful para interações e recomendações**
+- **Geração de embeddings de texto via modelo local (Sentence Transformers)**
+- **Armazenamento e busca vetorial eficiente com FAISS**
+- **Comunicação entre microserviços via HTTP**
+- **Testes automatizados para todos os serviços**
+- **Ambiente Docker para desenvolvimento e produção**
+
+---
+
+## 🛠️ Comandos de Teste
+
+```bash
+# Testes do backend Go
+make backend-test
+
+# Testes do embedding-server Python
+make embedding-test
+
+# Testes do vector-db Python
+make vector-db-test
+```
+
+---
+
+## 🏗️ Arquitetura do Sistema
+
+![Architecture](docs/arquitetura.drawio.png)
+
+**Fluxo detalhado:**
+
+1. O usuário faz uma interação via API do backend (Go)
+2. O backend solicita o embedding do texto/item ao embedding-server (Python)
+3. O embedding é armazenado e consultado no vector-db (Python/FAISS)
+4. O backend retorna recomendações baseadas na similaridade vetorial
+
+---
+
+## 🌐 Variáveis de Ambiente (exemplo)
+
+```env
+# .env.example
+EMBEDDING_API_URL=http://embedding-server:5000/embed
+VECTOR_DB_URL=http://vector-db:8001
+PORT=8080
+```
+
+---
+
+## 📁 Estrutura de Pastas
+
+```
+affinity_mind/
+  docker-compose.yml
+  Makefile
+  .env.sample
+  cmd/
+    backend/           # Backend Go (main.go, Dockerfile, etc)
+  infra/
+    vector-db/         # Banco vetorial (main.py, requirements.txt, etc)
+  ml/
+    embedding-server/  # API Python de embeddings (main.py, requirements.txt, etc)
+  docs/
+    arquitetura.drawio # Diagrama de arquitetura
+  .gitassets/          # Imagens para README
+```
+
+---
+
+## 💎 Links úteis
+
+- [Go Documentation](https://golang.org/doc/)
+- [FastAPI](https://fastapi.tiangolo.com/)
+- [FAISS](https://github.com/facebookresearch/faiss)
+- [Docker](https://www.docker.com/)
+- [Sentence Transformers](https://www.sbert.net/)
+
+---
